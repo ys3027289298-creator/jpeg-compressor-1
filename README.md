@@ -65,6 +65,27 @@ Where quality_factor ranges from 1-100 (higher is better).
 
 jpge.exe also includes a few other modes for exhaustive testing of the codec (-x option) and JPEG to TGA decompression (-d option) -- see the help text for more info.
 
+### EXIF orientation
+
+Phone JPEGs often store an EXIF `Orientation` tag (1-8) while the compressed
+pixels themselves are stored sideways. The example app can read this tag and
+rotate the decoded pixels upright before compression with the `-autorotate`
+option:
+
+```
+bin/jpge -autorotate phone.jpg upright.jpg 95
+```
+
+- The option defaults to off. Without `-autorotate`, the source metadata is
+  never parsed and the output JPEG is byte-identical to the unmodified tool.
+- A missing, truncated, or corrupt EXIF block is treated as orientation 1
+  (normal); conversion proceeds without error.
+- The rotation reorders pixels in the existing decoded buffer using a
+  cycle-leader permutation with a single pixel-sized scratch value plus a
+  compact index table, so no second full-image pixel buffer is allocated.
+- EXIF parsing works directly on the in-memory file buffer, and the feature
+  also applies to memory-to-memory compression (`-m`).
+
 ## Licenses
 
 The license of jpgd.cpp/.h and jpge.cpp/.h is either Public Domain or Apache 2.0. Choose whatever you want.

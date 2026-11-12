@@ -11,6 +11,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 #include "timer.h"
+#include "exif_orientation.h"
 #include <ctype.h>
 
 typedef unsigned int uint;
@@ -42,6 +43,7 @@ static int print_usage()
 	printf("-wfilename.tga: Write decompressed image to filename.tga\n");
 	printf("-s: Use stb_image.h to decompress JPEG image, instead of jpgd.cpp\n");
 	printf("-q: Use traditional JPEG Annex K quantization tables, instead of mozjpeg's default tables\n");
+	printf("-autorotate: Read the source JPEG's EXIF orientation and rotate it upright (in-place); missing/corrupt EXIF is treated as normal\n");
 	printf("-no_simd: Don't use SIMD instructions\n");
 	printf("-box_filtering: Use box filtering for chroma, instead of linear (decompression only)\n");
 	printf("\nExample usages:\n");
@@ -85,6 +87,43 @@ static uint get_file_size(const char* pFilename)
 	uint file_size = ftell(pFile);
 	fclose(pFile);
 	return file_size;
+}
+
+// Loads an entire file into a malloc'd buffer. Caller frees. Returns NULL on
+// failure, with *pSize set to 0.
+static uint8* load_file_to_memory(const char* pFilename, size_t* pSize)
+{
+	*pSize = 0;
+	FILE* pFile = fopen(pFilename, "rb");
+	if (!pFile)
+		return NULL;
+
+	fseek(pFile, 0, SEEK_END);
+	long file_size = ftell(pFile);
+	if (file_size <= 0)
+	{
+		fclose(pFile);
+		return NULL;
+	}
+
+	fseek(pFile, 0, SEEK_SET);
+	uint8* pData = (uint8*)malloc((size_t)file_size);
+	if (!pData)
+	{
+		fclose(pFile);
+		return NULL;
+	}
+
+	if (fread(pData, 1, (size_t)file_size, pFile) != (size_t)file_size)
+	{
+		free(pData);
+		fclose(pFile);
+		return NULL;
+	}
+
+	fclose(pFile);
+	*pSize = (size_t)file_size;
+	return pData;
 }
 
 struct image_compare_results
@@ -356,6 +395,7 @@ int main(int arg_c, char* ppArgs[])
 	bool use_traditional_quant_tables = false;
 	bool no_simd = false;
 	bool box_filtering = false;
+	bool auto_rotate = false;
 
 	int arg_index = 1;
 	while ((arg_index < arg_c) && (ppArgs[arg_index][0] == '-'))
@@ -363,6 +403,10 @@ int main(int arg_c, char* ppArgs[])
 		if (strcasecmp(ppArgs[arg_index], "-no_simd") == 0)
 		{
 			no_simd = true;
+		}
+		else if (strcasecmp(ppArgs[arg_index], "-autorotate") == 0)
+		{
+			auto_rotate = true;
 		}
 		else if (strcasecmp(ppArgs[arg_index], "-box_filtering") == 0)
 		{
@@ -484,6 +528,31 @@ int main(int arg_c, char* ppArgs[])
 	}
 
 	log_printf("Source file: \"%s\", image resolution: %ix%i, actual comps: %i\n", pSrc_filename, width, height, actual_comps);
+
+	// Optional EXIF orientation handling. Enabled only with -autorotate, so
+	// the default path never touches the source metadata or its pixels.
+	if (auto_rotate)
+	{
+		size_t source_file_size = 0;
+		uint8* pSource_file_data = load_file_to_memory(pSrc_filename, &source_file_size);
+		if (!pSource_file_data)
+		{
+			log_printf("Warning: could not read source file for EXIF orientation; treating as normal.\n");
+		}
+		else
+		{
+			int orientation = exif::read_orientation_from_memory(pSource_file_data, source_file_size);
+			free(pSource_file_data);
+
+			log_printf("EXIF orientation: %i\n", orientation);
+			if (orientation > 1 && orientation <= 8)
+			{
+				// Reorder pixels in-place (O(1) scratch, no whole-image copy).
+				exif::apply_orientation(pImage_data, width, height, req_comps, orientation);
+				log_printf("Auto-rotated to %ix%i\n", width, height);
+			}
+		}
+	}
 
 	// Fill in the compression parameter structure.
 	jpge::params params;

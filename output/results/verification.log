@@ -1,0 +1,52 @@
+# Verification run 2026-11-12T17:43:35Z
+
+== Section 1: all eight EXIF orientations ==
+  [PASS] orientation 1: dimensions 16x16 == 16x16
+  [PASS] orientation 1: pixels match upright reference
+  [PASS] orientation 1: log reports tag 1
+  [PASS] orientation 2: dimensions 16x16 == 16x16
+  [PASS] orientation 2: pixels match upright reference
+  [PASS] orientation 2: log reports tag 2
+  [PASS] orientation 3: dimensions 16x16 == 16x16
+  [PASS] orientation 3: pixels match upright reference
+  [PASS] orientation 3: log reports tag 3
+  [PASS] orientation 4: dimensions 16x16 == 16x16
+  [PASS] orientation 4: pixels match upright reference
+  [PASS] orientation 4: log reports tag 4
+  [PASS] orientation 5: dimensions 16x16 == 16x16
+  [PASS] orientation 5: pixels match upright reference
+  [PASS] orientation 5: log reports tag 5
+  [PASS] orientation 6: dimensions 16x16 == 16x16
+  [PASS] orientation 6: pixels match upright reference
+  [PASS] orientation 6: log reports tag 6
+  [PASS] orientation 7: dimensions 16x16 == 16x16
+  [PASS] orientation 7: pixels match upright reference
+  [PASS] orientation 7: log reports tag 7
+  [PASS] orientation 8: dimensions 16x16 == 16x16
+  [PASS] orientation 8: pixels match upright reference
+  [PASS] orientation 8: log reports tag 8
+== Section 2: big-endian Exif (orientation 6) ==
+  [PASS] big-endian orientation 6: dimensions
+  [PASS] big-endian orientation 6: pixels
+== Section 3: switch off is byte-identical ==
+  [PASS] orientation 1: switch on == switch off (no-op)
+  [PASS] orientation 3: switch off output differs from rotated
+  [PASS] orientation 6: switch off output differs from rotated
+  [PASS] orientation 8: switch off output differs from rotated
+  [PASS] plain input: zero byte difference with/without switch
+== Section 4: missing / corrupt EXIF treated as normal ==
+  [PASS] missing EXIF: handled as orientation 1
+  [PASS] missing EXIF: output byte-identical to switch off
+  [PASS] corrupt EXIF: handled as orientation 1
+  [PASS] corrupt EXIF: output byte-identical to switch off
+  [PASS] truncated EXIF: handled as orientation 1
+  [PASS] truncated EXIF: output byte-identical to switch off
+== Section 5: in-memory compression path (-m) ==
+  [PASS] -m memory path matches file path byte-for-byte
+  [PASS] -m output dimensions
+  [PASS] -m output pixels upright
+== Section 6: artifacts ==
+  [PASS] all eight orientation assets exist
+  [PASS] damaged metadata assets exist
+
+0 failed, 42 passed
