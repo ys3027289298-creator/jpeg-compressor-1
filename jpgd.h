@@ -127,7 +127,11 @@ namespace jpgd
 		enum
 		{
 			cFlagBoxChromaFiltering = 1,
-			cFlagDisableSIMD = 2
+			cFlagDisableSIMD = 2,
+			// For 4-component (CMYK/YCCK) JPEGs: output the 4 raw color-space
+			// components instead of converting to RGB. Has no effect on
+			// grayscale or 3-component (RGB/YCbCr) images.
+			cFlagOutputCMYK = 4
 		};
 
 		// Call get_error_code() after constructing to determine if the stream is valid or not. You may call the get_width(), get_height(), etc.
@@ -201,6 +205,14 @@ namespace jpgd
 		jpeg_decoder_stream* m_pStream;
 
 		int m_progressive_flag;
+
+		// Adobe APP14 color transform metadata (distinguishes CMYK from YCCK).
+		bool m_adobe_marker_seen;
+		uint8 m_adobe_color_transform;
+		// Set when a 4-component frame actually carries YCCK samples.
+		bool m_frame_is_ycck;
+		// Set when the caller wants the raw CMYK components instead of RGB.
+		bool m_output_cmyk;
 
 		uint8 m_huff_ac[JPGD_MAX_HUFF_TABLES];
 		uint8* m_huff_num[JPGD_MAX_HUFF_TABLES];      // pointer to number of Huffman codes per bit size
@@ -285,6 +297,7 @@ namespace jpgd
 		void read_dht_marker();
 		void read_dqt_marker();
 		void read_sof_marker();
+		void read_app14_marker();
 		void skip_variable_marker();
 		void read_dri_marker();
 		void read_sos_marker();
@@ -320,6 +333,7 @@ namespace jpgd
 		void H1V2Convert();
 		void H1V2ConvertFiltered();
 		void H1V1Convert();
+		void CMYK111Convert();
 		void gray_convert();
 		void find_eoi();
 		inline uint get_char();

@@ -72,7 +72,7 @@ namespace jpgd {
 		M_APP0 = 0xE0, M_APP15 = 0xEF, M_JPG0 = 0xF0, M_JPG13 = 0xFD, M_COM = 0xFE, M_TEM = 0x01, M_ERROR = 0x100, RST0 = 0xD0
 	};
 
-	enum JPEG_SUBSAMPLING { JPGD_GRAYSCALE = 0, JPGD_YH1V1, JPGD_YH2V1, JPGD_YH1V2, JPGD_YH2V2 };
+	enum JPEG_SUBSAMPLING { JPGD_GRAYSCALE = 0, JPGD_YH1V1, JPGD_YH2V1, JPGD_YH1V2, JPGD_YH2V2, JPGD_CMYK111 };
 
 #if JPGD_USE_SSE2
 #include "jpgd_idct.h"
@@ -890,6 +890,66 @@ namespace jpgd {
 		}
 	}
 
+	// Read an Adobe APP14 marker, which carries the color transform byte
+	// distinguishing CMYK (0) from YCCK (2) 4-component frames.
+	// Malformed/short segments are tolerated: the color transform simply
+	// stays at its default instead of aborting decoding.
+	void jpeg_decoder::read_app14_marker()
+	{
+		uint num_left = get_bits(16);
+
+		if (num_left < 2)
+		{
+			stop_decoding(JPGD_BAD_VARIABLE_MARKER);
+			return;
+		}
+
+		num_left -= 2;
+
+		static const uint8 adobe_tag[6] = { 'A', 'd', 'o', 'b', 'e', 0 };
+
+		if (num_left < (uint)sizeof(adobe_tag))
+		{
+			while (num_left--)
+				get_bits(8);
+			return;
+		}
+
+		bool tag_ok = true;
+		for (uint i = 0; i < (uint)sizeof(adobe_tag); i++)
+		{
+			if (get_bits(8) != adobe_tag[i])
+				tag_ok = false;
+		}
+
+		num_left -= (uint)sizeof(adobe_tag);
+
+		if (!tag_ok || (num_left < 6))
+		{
+			while (num_left--)
+				get_bits(8);
+			return;
+		}
+
+		get_bits(8);  // DCT encode version
+		get_bits(16); // APP14 flags 0
+		get_bits(16); // APP14 flags 1
+		const uint color_transform = get_bits(8);
+		num_left -= 6;
+
+		// Only the transforms defined by the Adobe JPEG spec are honored.
+		// Unknown values are ignored (degrade, don't crash) and the default
+		// transform remains in effect.
+		if (color_transform <= 2)
+		{
+			m_adobe_marker_seen = true;
+			m_adobe_color_transform = static_cast<uint8>(color_transform);
+		}
+
+		while (num_left--)
+			get_bits(8);
+	}
+
 	// Used to skip unrecognized markers.
 	void jpeg_decoder::skip_variable_marker()
 	{
@@ -1064,6 +1124,11 @@ namespace jpgd {
 				read_dri_marker();
 				break;
 			}
+			case 0xEE: /* Adobe APP14 color transform marker */
+			{
+				read_app14_marker();
+				break;
+			}
 			//case M_APP0:  /* no need to read the JFIF marker */
 			case M_JPG:
 			case M_RST0:    /* no parameters */
@@ -1191,6 +1256,11 @@ namespace jpgd {
 		m_image_x_size = m_image_y_size = 0;
 		m_pStream = pStream;
 		m_progressive_flag = JPGD_FALSE;
+
+		m_adobe_marker_seen = false;
+		m_adobe_color_transform = 0;
+		m_frame_is_ycck = false;
+		m_output_cmyk = (flags & cFlagOutputCMYK) != 0;
 				
 		memset(m_huff_ac, 0, sizeof(m_huff_ac));
 		memset(m_huff_num, 0, sizeof(m_huff_num));
@@ -1614,6 +1684,92 @@ namespace jpgd {
 			}
 
 			s += 64 * 3;
+		}
+	}
+
+	// Blinn-style 8-bit multiply: matches stb_image's stbi__blinn_8x8() and
+	// libjpeg's jdiv_roundu-based CMYK undercolor math within 1 LSB.
+	static inline uint8 cmyk_blinn_8x8(uint8 x, uint8 y)
+	{
+		unsigned int t = (unsigned int)x * y + 128;
+		return static_cast<uint8>((t + (t >> 8)) >> 8);
+	}
+
+	// 4-component 1x1 CMYK (or YCCK) to packed RGBA.
+	// JPEG stores ink values inverted (255 = no ink), so the raw components
+	// are complemented before the CMY*K combine. YCCK frames are first run
+	// through the regular YCbCr->RGB path.
+	void jpeg_decoder::CMYK111Convert()
+	{
+		int row = m_max_mcu_y_size - m_mcu_lines_left;
+		uint8* d = m_pScan_line_0;
+		uint8* s = m_pSample_buf + row * 8;
+
+		if (m_output_cmyk)
+		{
+			// Emit the four components in standard (non-inverted) CMYK order.
+			for (int i = m_max_mcus_per_row; i > 0; i--)
+			{
+				for (int j = 0; j < 8; j++)
+				{
+					d[0] = static_cast<uint8>(255 - s[j]);
+					d[1] = static_cast<uint8>(255 - s[64 + j]);
+					d[2] = static_cast<uint8>(255 - s[128 + j]);
+					d[3] = static_cast<uint8>(255 - s[192 + j]);
+
+					d += 4;
+				}
+
+				s += 64 * 4;
+			}
+		}
+		else if (m_frame_is_ycck)
+		{
+			for (int i = m_max_mcus_per_row; i > 0; i--)
+			{
+				for (int j = 0; j < 8; j++)
+				{
+					int y = s[j];
+					int cb = s[64 + j];
+					int cr = s[128 + j];
+					uint8 k = s[192 + j];
+
+					int r = clamp(y + m_crr[cr]);
+					int g = clamp(y + ((m_crg[cr] + m_cbg[cb]) >> 16));
+					int b = clamp(y + m_cbb[cb]);
+
+					d[0] = cmyk_blinn_8x8(static_cast<uint8>(255 - r), k);
+					d[1] = cmyk_blinn_8x8(static_cast<uint8>(255 - g), k);
+					d[2] = cmyk_blinn_8x8(static_cast<uint8>(255 - b), k);
+					d[3] = 255;
+
+					d += 4;
+				}
+
+				s += 64 * 4;
+			}
+		}
+		else
+		{
+			for (int i = m_max_mcus_per_row; i > 0; i--)
+			{
+				for (int j = 0; j < 8; j++)
+				{
+					uint8 c = s[j];
+					uint8 m = s[64 + j];
+					uint8 yy = s[128 + j];
+					uint8 k = s[192 + j];
+
+					d[0] = cmyk_blinn_8x8(c, k);
+					d[1] = cmyk_blinn_8x8(m, k);
+					d[2] = cmyk_blinn_8x8(yy, k);
+					d[3] = 255;
+
+					d += 4;
+				}
+
+				s += 64 * 4;
+			}
 		}
 	}
 
@@ -2255,6 +2411,13 @@ namespace jpgd {
 
 			break;
 		}
+		case JPGD_CMYK111:
+		{
+			CMYK111Convert();
+			*pScan_line = m_pScan_line_0;
+
+			break;
+		}
 		}
 
 		*pScan_line_len = m_real_dest_bytes_per_scan_line;
@@ -2612,6 +2775,24 @@ namespace jpgd {
 			}
 			else
 				stop_decoding(JPGD_UNSUPPORTED_SAMP_FACTORS);
+		}
+		else if (m_comps_in_frame == 4)
+		{
+			// Only 1x1 sampled CMYK/YCCK frames are handled. Other sampling
+			// factors are reported as unsupported rather than mis-decoded.
+			for (i = 0; i < 4; i++)
+				if ((m_comp_h_samp[i] != 1) || (m_comp_v_samp[i] != 1))
+					stop_decoding(JPGD_UNSUPPORTED_SAMP_FACTORS);
+
+			// Adobe transform 2 means the samples are YCCK and must be run
+			// through YCbCr->RGB first. Transform 0 (or anything else,
+			// including a missing/illegal marker) is treated as plain CMYK.
+			m_frame_is_ycck = m_adobe_marker_seen && (m_adobe_color_transform == 2);
+
+			m_scan_type = JPGD_CMYK111;
+			m_max_blocks_per_mcu = 4;
+			m_max_mcu_x_size = 8;
+			m_max_mcu_y_size = 8;
 		}
 		else
 			stop_decoding(JPGD_UNSUPPORTED_COLORSPACE);
@@ -3197,9 +3378,11 @@ namespace jpgd {
 		if (!pImage_data)
 			return nullptr;
 
+		const bool keep_cmyk = ((flags & jpeg_decoder::cFlagOutputCMYK) != 0) && (req_comps == 4) && (decoder.get_num_components() == 4);
+
 		for (int y = 0; y < image_height; y++)
 		{
-			const uint8* pScan_line;
+			const uint8* pScan_line = nullptr;
 			uint scan_line_len;
 			if (decoder.decode((const void**)&pScan_line, &scan_line_len) != JPGD_SUCCESS)
 			{
@@ -3209,8 +3392,33 @@ namespace jpgd {
 
 			uint8* pDst = pImage_data + y * dst_bpl;
 
-			if (((req_comps == 1) && (decoder.get_num_components() == 1)) || ((req_comps == 4) && (decoder.get_num_components() == 3)))
+			if (((req_comps == 1) && (decoder.get_num_components() == 1)) || ((req_comps == 4) && (decoder.get_num_components() == 3)) || keep_cmyk)
 				memcpy(pDst, pScan_line, dst_bpl);
+			else if (decoder.get_num_components() == 4)
+			{
+				// CMYK/YCCK frame converted to packed RGB(A).
+				if (req_comps == 1)
+				{
+					const int YR = 19595, YG = 38470, YB = 7471;
+					for (int x = 0; x < image_width; x++)
+					{
+						int r = pScan_line[x * 4 + 0];
+						int g = pScan_line[x * 4 + 1];
+						int b = pScan_line[x * 4 + 2];
+						*pDst++ = static_cast<uint8>((r * YR + g * YG + b * YB + 32768) >> 16);
+					}
+				}
+				else
+				{
+					for (int x = 0; x < image_width; x++)
+					{
+						pDst[0] = pScan_line[x * 4 + 0];
+						pDst[1] = pScan_line[x * 4 + 1];
+						pDst[2] = pScan_line[x * 4 + 2];
+						pDst += 3;
+					}
+				}
+			}
 			else if (decoder.get_num_components() == 1)
 			{
 				if (req_comps == 3)

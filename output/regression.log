@@ -1,0 +1,5 @@
+== building pristine jpgd from git HEAD ==
+[ OK ] rgb.jpg byte-identical on old vs. new jpgd
+[ OK ] gray.jpg byte-identical on old vs. new jpgd
+
+REGRESSION: old RGB/grayscale paths unchanged

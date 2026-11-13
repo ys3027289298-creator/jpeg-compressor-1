@@ -44,6 +44,7 @@ static int print_usage()
 	printf("-q: Use traditional JPEG Annex K quantization tables, instead of mozjpeg's default tables\n");
 	printf("-no_simd: Don't use SIMD instructions\n");
 	printf("-box_filtering: Use box filtering for chroma, instead of linear (decompression only)\n");
+	printf("-cmyk: Keep 4-component CMYK/YCCK images in CMYK instead of converting to RGB (decompression only)\n");
 	printf("\nExample usages:\n");
 	printf("Test compression: jpge orig.png comp.jpg 90\n");
 	printf("Test decompression: jpge -d comp.jpg uncomp.tga\n");
@@ -278,7 +279,7 @@ failure:
 }
 
 // Test JPEG file decompression using jpgd.h
-static int test_jpgd(const char* pSrc_filename, const char* pDst_filename, bool use_jpgd, bool no_simd, bool box_filtering)
+static int test_jpgd(const char* pSrc_filename, const char* pDst_filename, bool use_jpgd, bool no_simd, bool box_filtering, bool keep_cmyk)
 {
 	// Load the source JPEG image.
 	const int req_comps = 4; // request RGB image
@@ -302,7 +303,8 @@ static int test_jpgd(const char* pSrc_filename, const char* pDst_filename, bool 
 		{
 			pImage_data = jpgd::decompress_jpeg_image_from_file(pSrc_filename, &width, &height, &actual_comps, req_comps, 
 				(no_simd ? jpgd::jpeg_decoder::cFlagDisableSIMD : 0) |
-				(box_filtering ? jpgd::jpeg_decoder::cFlagBoxChromaFiltering : 0) );
+				(box_filtering ? jpgd::jpeg_decoder::cFlagBoxChromaFiltering : 0) |
+				(keep_cmyk ? jpgd::jpeg_decoder::cFlagOutputCMYK : 0) );
 		}
 		else
 		{
@@ -356,6 +358,7 @@ int main(int arg_c, char* ppArgs[])
 	bool use_traditional_quant_tables = false;
 	bool no_simd = false;
 	bool box_filtering = false;
+	bool keep_cmyk = false;
 
 	int arg_index = 1;
 	while ((arg_index < arg_c) && (ppArgs[arg_index][0] == '-'))
@@ -367,6 +370,10 @@ int main(int arg_c, char* ppArgs[])
 		else if (strcasecmp(ppArgs[arg_index], "-box_filtering") == 0)
 		{
 			box_filtering = true;
+		}
+		else if (strcasecmp(ppArgs[arg_index], "-cmyk") == 0)
+		{
+			keep_cmyk = true;
 		}
 		else
 		{
@@ -453,7 +460,7 @@ int main(int arg_c, char* ppArgs[])
 
 		const char* pSrc_filename = ppArgs[arg_index++];
 		const char* pDst_filename = ppArgs[arg_index++];
-		return test_jpgd(pSrc_filename, pDst_filename, use_jpgd, no_simd, box_filtering);
+		return test_jpgd(pSrc_filename, pDst_filename, use_jpgd, no_simd, box_filtering, keep_cmyk);
 	}
 
 	// Test jpge

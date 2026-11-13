@@ -1,0 +1,5 @@
+[ OK ] tests/assets/cmyk.jpg decoded 8x8 comps=4
+[ OK ] tests/assets/cmyk_badtag.jpg decoded 8x8 comps=4
+[ OK ] illegal tag degrades to identical CMYK output
+
+DEGRADE: all checks passed

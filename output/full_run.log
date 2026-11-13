@@ -1,0 +1,59 @@
+########## 1/5 build ##########
+CMake Warning (dev) at CMakeLists.txt:1 (project):
+  cmake_minimum_required() should be called prior to this top-level project()
+  call.  Please see the cmake-commands(7) manual for usage documentation of
+  both commands.
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+CMake Deprecation Warning at CMakeLists.txt:3 (cmake_minimum_required):
+  Compatibility with CMake < 3.5 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value or use a ...<max> suffix to tell
+  CMake that the project does not need compatibility with older versions.
+
+
+Initial BUILD_X64=ON
+Initial CMAKE_BUILD_TYPE=Release
+jpge build type: Release
+Building 64-bit
+[ 80%] Building CXX object CMakeFiles/jpge.dir/timer.cpp.o
+[ 80%] Building CXX object CMakeFiles/jpge.dir/jpgd.cpp.o
+[ 80%] Building CXX object CMakeFiles/jpge.dir/tga2jpg.cpp.o
+[ 80%] Building CXX object CMakeFiles/jpge.dir/jpge.cpp.o
+[100%] Linking CXX executable /home/ys/feedback/uidreczz28Z0cpvyREO/bin/jpge
+[100%] Built target jpge
+
+########## 2/5 test assets (small, self-made) ##########
+rgb.jpg            676 bytes
+gray.jpg           349 bytes
+cmyk.jpg           414 bytes
+ycck.jpg           414 bytes
+cmyk_badtag.jpg    414 bytes
+
+########## 3/5 color conversion vs. stb_image reference ##########
+[ OK ] tests/assets/cmyk.jpg        CMYK  8x8 max diff 0 (bound 4, mean 0.000)
+[ OK ] tests/assets/cmyk.jpg        CMYK  8x8 4 comps, 256 bytes
+[ OK ] tests/assets/ycck.jpg        CMYK  8x8 max diff 1 (bound 4, mean 0.031)
+[ OK ] tests/assets/ycck.jpg        CMYK  8x8 4 comps, 256 bytes
+[ OK ] tests/assets/rgb.jpg         RGB   8x8 max diff 0 (bound 0, mean 0.000)
+[ OK ] tests/assets/gray.jpg        RGB   8x8 max diff 0 (bound 0, mean 0.000)
+
+VERIFY: all checks passed
+
+########## 4/5 illegal color-space marker degradation ##########
+[ OK ] tests/assets/cmyk.jpg decoded 8x8 comps=4
+[ OK ] tests/assets/cmyk_badtag.jpg decoded 8x8 comps=4
+[ OK ] illegal tag degrades to identical CMYK output
+
+DEGRADE: all checks passed
+
+########## 5/5 zero regression + CLI smoke tests ##########
+== building pristine jpgd from git HEAD ==
+[ OK ] rgb.jpg byte-identical on old vs. new jpgd
+[ OK ] gray.jpg byte-identical on old vs. new jpgd
+
+REGRESSION: old RGB/grayscale paths unchanged
+CLI smoke tests wrote output/*.tga
+
+ALL CHECKS PASSED

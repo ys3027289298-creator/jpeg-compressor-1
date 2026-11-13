@@ -1,0 +1,30 @@
+jpge/jpgd example app
+Using jpgd::decompress_jpeg_image_from_file
+Source JPEG file: "tests/assets/cmyk.jpg", image resolution: 8x8, actual comps: 4
+Decompression time: 0.039ms
+Wrote decompressed image to TGA file "output/cmyk_rgb.tga"
+Success.
+jpge/jpgd example app
+Using jpgd::decompress_jpeg_image_from_file
+Source JPEG file: "tests/assets/cmyk.jpg", image resolution: 8x8, actual comps: 4
+Decompression time: 0.038ms
+Wrote decompressed image to TGA file "output/cmyk_keep.tga"
+Success.
+jpge/jpgd example app
+Using jpgd::decompress_jpeg_image_from_file
+Source JPEG file: "tests/assets/ycck.jpg", image resolution: 8x8, actual comps: 4
+Decompression time: 0.031ms
+Wrote decompressed image to TGA file "output/ycck_rgb.tga"
+Success.
+jpge/jpgd example app
+Using jpgd::decompress_jpeg_image_from_file
+Source JPEG file: "tests/assets/cmyk_badtag.jpg", image resolution: 8x8, actual comps: 4
+Decompression time: 0.034ms
+Wrote decompressed image to TGA file "output/badtag_rgb.tga"
+Success.
+jpge/jpgd example app
+Using stbi_load
+Source JPEG file: "tests/assets/cmyk.jpg", image resolution: 8x8, actual comps: 3
+Decompression time: 0.036ms
+Wrote decompressed image to TGA file "output/cmyk_stb_ref.tga"
+Success.

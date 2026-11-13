@@ -1,0 +1,8 @@
+[ OK ] tests/assets/cmyk.jpg        CMYK  8x8 max diff 0 (bound 4, mean 0.000)
+[ OK ] tests/assets/cmyk.jpg        CMYK  8x8 4 comps, 256 bytes
+[ OK ] tests/assets/ycck.jpg        CMYK  8x8 max diff 1 (bound 4, mean 0.031)
+[ OK ] tests/assets/ycck.jpg        CMYK  8x8 4 comps, 256 bytes
+[ OK ] tests/assets/rgb.jpg         RGB   8x8 max diff 0 (bound 0, mean 0.000)
+[ OK ] tests/assets/gray.jpg        RGB   8x8 max diff 0 (bound 0, mean 0.000)
+
+VERIFY: all checks passed
